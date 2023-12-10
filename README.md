@@ -11,10 +11,7 @@ conda activate concrete
 pip install -r requirements.txt # x86-64 Linux
 ```
 
-## Experiments
-
-- [How to run experiments?](docs/experiments.md)
-- [Prerun results](results)
+## [Experiments](results)
 
 ## Acknowledgements
 
