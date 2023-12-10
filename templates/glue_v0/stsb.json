@@ -1,0 +1,4 @@
+{
+    "input_text": "stsb sentence1: {sentence1} sentence2: {sentence2}",
+    "target_text": "{:.1f}"
+}

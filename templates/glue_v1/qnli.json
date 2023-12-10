@@ -1,0 +1,7 @@
+{
+    "input_text": "Given the context: '{sentence}', does the question '{question}' have an answer based on the information provided? Answer with 'yes' or 'no'.",
+    "target_text": {
+        "0": "yes",
+        "1": "no"
+    }
+}

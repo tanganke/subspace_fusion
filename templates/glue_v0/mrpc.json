@@ -1,0 +1,7 @@
+{
+    "input_text": "mrpc sentence1: {sentence1} sentence2: {sentence2}",
+    "target_text": {
+        "0": "not_equivalent",
+        "1": "equivalent"
+    }
+}

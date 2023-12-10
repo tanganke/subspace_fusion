@@ -1,0 +1,8 @@
+{
+    "input_text": "mnli hypothesis: {hypothesis} premise: {premise}",
+    "target_text": {
+        "0": "entailment",
+        "1": "neutral",
+        "2": "contradiction"
+    }
+}

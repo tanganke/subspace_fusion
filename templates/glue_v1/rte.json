@@ -1,0 +1,8 @@
+{
+    "description": "Template used by GLUE-RTE",
+    "input_text": "Does the text: '{sentence1}' entail that '{sentence2}' is true? Provide 'yes' or 'no'.",
+    "target_text": {
+        "0": "yes",
+        "1": "no"
+    }
+}

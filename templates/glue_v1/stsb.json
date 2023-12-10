@@ -1,0 +1,4 @@
+{
+    "input_text": "Consider the sentences '{sentence1}' and '{sentence2}'. On a scale from 1 (completely different) to 5 (completely similar), rate the similarity.",
+    "target_text": "{:.1f}"
+}

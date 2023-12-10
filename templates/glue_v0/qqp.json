@@ -1,0 +1,8 @@
+{
+    "description": "Template used by GLUE-QQP",
+    "input_text": "qqp question1: {question1} question2: {question2}",
+    "target_text": {
+        "0": "not_duplicate",
+        "1": "duplicate"
+    }
+}

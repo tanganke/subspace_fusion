@@ -1,0 +1,7 @@
+{
+    "input_text": "Do the questions '{question1}' and '{question2}' have the same intent? Answere with 'yes' or 'no'.",
+    "target_text": {
+        "0": "no",
+        "1": "yes"
+    }
+}

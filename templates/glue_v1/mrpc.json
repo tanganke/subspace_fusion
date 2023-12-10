@@ -1,0 +1,7 @@
+{
+    "input_text": "Are the following sentences '{sentence1}' and '{sentence2}' conveying the same meaning? Answere with 'yes' or 'no'.",
+    "target_text": {
+        "0": "no",
+        "1": "yes"
+    }
+}

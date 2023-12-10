@@ -1,0 +1,7 @@
+{
+    "input_text": "sst2 sentence: {sentence}",
+    "target_text": {
+        "0": "negative",
+        "1": "positive"
+    }
+}

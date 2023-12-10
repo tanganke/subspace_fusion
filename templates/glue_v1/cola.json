@@ -1,0 +1,8 @@
+{
+    "description": "template used by GLUE-CoLA",
+    "input_text": "Indicate if the following sentence is grammatically correct or not: \"{sentence}\". Answere 'acceptable' or 'unacceptable'.",
+    "target_text": {
+        "0": "unacceptable",
+        "1": "acceptable"
+    }
+}

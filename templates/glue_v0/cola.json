@@ -1,0 +1,8 @@
+{
+    "description": "template used by GLUE-CoLA",
+    "input_text": "cola sentence: {sentence}",
+    "target_text": {
+        "0": "unacceptable",
+        "1": "acceptable"
+    }
+}

@@ -1,0 +1,7 @@
+{
+    "input_text": "Given the sentence '{sentence}', determine the sentiment. Is it positive or negative?",
+    "target_text": {
+        "0": "negative",
+        "1": "positive"
+    }
+}
