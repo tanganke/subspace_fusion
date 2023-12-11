@@ -1,1 +1,2 @@
-download lora fine-tuned flan-t5 models: https://github.com/tanganke/subspace_fusion/releases/tag/flan-t5
+- download LoRA fine-tuned flan-t5 models: https://github.com/tanganke/subspace_fusion/releases/tag/flan-t5
+- download fine-tuned CLIP models: https://drive.google.com/drive/folders/1u_Tva6x0p6oxu5Eo0ZZsf-520Cc_3MKw
