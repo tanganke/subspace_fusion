@@ -195,6 +195,18 @@ class Program:
 
     @torch.no_grad()
     def eval_model_on_datasets(self, model):
+        """
+        Evaluates the given model on the test datasets specified in the configuration.
+        It iterates over each test dataset and its corresponding data loader, computes the metric for the dataset,
+        and logs the score. If the `fast_dev_run` configuration option is set, it only evaluates on one batch per dataset.
+        The results are returned as a dictionary mapping dataset names to scores.
+
+        Args:
+            model (torch.nn.Module): The model to evaluate.
+
+        Returns:
+            dict: A dictionary mapping dataset names to evaluation scores.
+        """
         results = {}
         model.eval()
         for dataset_name, test_loader in tqdm(
@@ -212,67 +224,129 @@ class Program:
         return results
 
     def load_models(self, task_vector_device=torch.device("cpu")):
-        log.info("loading pretrained model and tokenizer")
+        """
+        Loads the pretrained model and tokenizer. If a PEFT (parameter-efficient fine-tuning) configuration is provided,
+        it also sets up the PEFT model. It then loads the fine-tuned weights for each dataset specified in the configuration.
+        If PEFT is used, it computes the task vector as the difference between the PEFT model after merging and unloading,
+        and the pretrained model. The task vectors are stored in the instance variable `task_vectors`.
+
+        Args:
+            task_vector_device (torch.device, optional): The device to which the task vectors are moved. Defaults to CPU.
+
+        Side Effects:
+            Sets the instance variables `tokenizer`, `pretrained_model`, and `task_vectors`.
+        """
         cfg = self.cfg
 
+        # load pretrained model and tokenizer
+        log.info("loading pretrained model and tokenizer")
         self.tokenizer = instantiate(self.cfg.model.tokenizer)
         self.pretrained_model = instantiate(self.cfg.model.model)
+        # if PEFT configuration is provided, set up the PEFT model
         if cfg.peft.peft_config is not None:
             peft_config = peft.PeftConfig = instantiate(cfg.peft.peft_config)
             peft_config.target_modules = list(peft_config.target_modules)
             if hasattr(cfg.peft, "seed") and cfg.peft.seed is not None:
-                log.info(f"set peft seed to {cfg.peft.seed}")
+                log.debug(f"set peft seed to {cfg.peft.seed}")
                 L.seed_everything(cfg.peft.seed)
-            peft_model = peft.get_peft_model(deepcopy(self.pretrained_model), peft_config)
+            peft_model = peft.get_peft_model(
+                deepcopy(self.pretrained_model), peft_config
+            )
             peft_model.print_trainable_parameters()
+        # fix all parameters of pre-trained model to save memory
+        self.pretrained_model.eval()
+        for n, p in self.pretrained_model.named_parameters():
+            p.requires_grad_(False)
 
+        # load task vectors
         pretrained_sd = self.pretrained_model.state_dict()
         task_vectors = []
-        for dataset_name in track(cfg.test_datasets, description="loading finetuned weights"):
+        for dataset_name in track(
+            cfg.test_datasets, description="loading finetuned weights"
+        ):
             if cfg.peft.peft_config is None:
-                weight_file = finetuned_model_path(cfg.model.name, template_name="glue_v1", dataset_name=dataset_name)
+                weight_file = finetuned_model_path(
+                    cfg.model.name, template_name="glue_v1", dataset_name=dataset_name
+                )
                 weights = torch.load(weight_file, map_location="cpu")
                 with torch.no_grad():
-                    task_vectors.append(state_dict_sub(weights, pretrained_sd, strict=False))
+                    task_vectors.append(
+                        state_dict_sub(weights, pretrained_sd, strict=False)
+                    )
             else:
                 # if peft is used, we need to load the peft model and merge the task vector
                 # the task vector is the difference between the peft model after merged and the pretrained model
-                weight_file = finetuned_model_path(cfg.model.name, template_name="glue_v1", dataset_name=dataset_name)
+                weight_file = finetuned_model_path(
+                    cfg.model.name, template_name="glue_v1", dataset_name=dataset_name
+                )
                 weight_file = weight_file.parent / cfg.peft.name / weight_file.name
                 weights = torch.load(weight_file, map_location="cpu")
                 peft_model.load_state_dict(weights, strict=False)
                 with torch.no_grad():
                     # merge and unload the peft model, then compute the task vector
                     _peft_model = deepcopy(peft_model).merge_and_unload()
-                    _task_vector = state_dict_sub(_peft_model.state_dict(), pretrained_sd, strict=False)
-                    _task_vector = {k: v for k, v in _task_vector.items() if not torch.all(v == 0)}
+                    _task_vector = state_dict_sub(
+                        _peft_model.state_dict(), pretrained_sd, strict=False
+                    )
+                    _task_vector = {
+                        k: v for k, v in _task_vector.items() if not torch.all(v == 0)
+                    }
                     assert len(_task_vector) > 0, "task vector is empty"
                     task_vectors.append(_task_vector)
-        task_vectors = [{k: v.detach_().to(task_vector_device, non_blocking=True) for k, v in tv.items()} for tv in task_vectors]
+        # move task vectors to `task_vector_device`
+        task_vectors = [
+            {
+                k: v.detach_().to(task_vector_device, non_blocking=True)
+                for k, v in tv.items()
+            }
+            for tv in task_vectors
+        ]
         self.task_vectors = task_vectors
 
-        # fix all parameters of pre-trained model to save memory
-        for n, p in self.pretrained_model.named_parameters():
-            p.requires_grad_(False)
-        assert not isinstance(self.pretrained_model, peft.PeftModel), "pretrained model should not be a peft model"
+        assert not isinstance(
+            self.pretrained_model, peft.PeftModel
+        ), "pretrained model should not be a peft model"
 
     def load_datasets(self):
+        """
+        Loads the datasets specified in the configuration. If a dataset is found in the cache, it is loaded from there.
+        Otherwise, it is instantiated from the configuration, optionally preprocessed, and saved to the cache.
+        The method then checks for a validation split in the dataset and raises an error if none is found.
+        The validation split is added to the list of test datasets.
+        Finally, it sets up the data loaders for the test datasets, both with and without shuffling, and creates an iterator
+        for each shuffled test loader.
+
+        Raises:
+            ValueError: If a dataset has no validation split.
+
+        Side Effects:
+            Sets the instance variables `test_datasets`, `test_loaders`, `shuffled_test_loaders`, and
+            `shuffled_test_loader_iters`.
+        """
         test_datasets = []
-        for dataset_name in track(self.cfg.test_datasets, description="loading datasets"):
+        for dataset_name in track(
+            self.cfg.test_datasets, description="loading datasets"
+        ):
             if (cache_dir := CACHE_DIR / "datasets" / dataset_name).exists():
                 log.info(f"loading dataset {dataset_name} from cache")
                 dataset = load_from_disk(cache_dir)
             else:
-                config = OmegaConf.load(CONFIG_DIR / "datasets" / f"{dataset_name}.yaml")
+                config = OmegaConf.load(
+                    CONFIG_DIR / "datasets" / f"{dataset_name}.yaml"
+                )
                 dataset = instantiate(config.datasets)
 
                 if hasattr(config, "preprocessor"):
                     log.info("preprocessing the dataset")
                     preprocessor = instantiate(
                         config.preprocessor,
-                        template_file=TEMPLATE_DIR / "glue_v1" / os.path.basename(config.preprocessor.template_file),
+                        template_file=TEMPLATE_DIR
+                        / "glue_v1"
+                        / os.path.basename(config.preprocessor.template_file),
                         tokenizer=self.tokenizer,
-                        tokenizer_kwargs=self.cfg.model.tokenizer_kwargs if hasattr(self.cfg.model, "tokenizer_kwargs") else None,
+                        tokenizer_kwargs=self.cfg.model.tokenizer_kwargs
+                        if hasattr(self.cfg.model, "tokenizer_kwargs")
+                        else None,
                     )
                     dataset = dataset.map(
                         preprocessor,
@@ -315,7 +389,10 @@ class Program:
         )
 
         self.shuffled_test_loader_iters = {
-            dataset_name: iter(itertools.cycle(test_loader)) for dataset_name, test_loader in zip(self.cfg.test_datasets, self.shuffled_test_loaders)
+            dataset_name: iter(itertools.cycle(test_loader))
+            for dataset_name, test_loader in zip(
+                self.cfg.test_datasets, self.shuffled_test_loaders
+            )
         }
 
 
