@@ -28,10 +28,9 @@ class Program:
         cfg.save = str(CHECKPOINT_DIR / cfg.model)
         cfg.data_location = str(DATA_DIR)
 
-        if cfg.sam_retraining:
-            save_dir = RESULTS_DIR / "sam_retraining" / cfg.model
-        else:
-            save_dir = RESULTS_DIR / cfg.model
+        save_dir = RESULTS_DIR / cfg.model
+        if cfg.version is not None:
+            save_dir = save_dir / f"version_{cfg.version}"
         os.makedirs(save_dir, exist_ok=True)
         self.results_path = results_path = save_dir / "clip_concrete_task_arithmetic.csv"
         self.ckpt_dir = results_path.parent / os.path.basename(results_path).split(".")[0]
@@ -56,12 +55,17 @@ class Program:
         results = {"epoch": [], "dataset": [], "acc": []}
         # for task arithmetic, the task-wise weights are not optimizable
         self.model.task_wise_weight.requires_grad_(False)
-        meta_optimizer = torch.optim.Adam(self.shared_mask.parameters(), lr=1e-3, betas=(0.9, 0.999), weight_decay=0.0)
+        meta_optimizer = torch.optim.Adam(
+            self.shared_mask.parameters(),
+            lr=cfg.lr,
+            betas=(0.9, 0.999),
+            weight_decay=cfg.wd,
+        )
 
         self.merge_model_weights()
-        self.eval_model_on_datasets(epoch_idx=0, results=results)
+        # self.eval_model_on_datasets(epoch_idx=0, results=results)
 
-        for epoch_idx in tqdm(range(epochs := 2000)):
+        for epoch_idx in (pbar := tqdm(range(epochs := 2000))):
             # task arithmetic is not optimizable, skip
 
             # meta update
@@ -80,11 +84,12 @@ class Program:
             losses.backward()
             meta_optimizer.step()
             self.merge_model_weights()
+            pbar.set_description(f"epoch: {epoch_idx + 1}/{epochs}, loss: {losses.item():.2f}")
 
             if cfg.fast_dev_run and epoch_idx > 2:
                 break
 
-            if ((epoch_idx + 1) % 200) == 0:
+            if ((epoch_idx + 1) % 1000) == 0:
                 os.makedirs(self.ckpt_dir, exist_ok=True)
                 torch.save(
                     {
@@ -132,7 +137,13 @@ class Program:
             model.load_state_dict(state_dict)
             model = model.cuda()
 
-            metrics = eval_single_dataset_preprocess_head(model, self.classification_heads[dataset_name], dataset_name, cfg)
+            metrics = eval_single_dataset_preprocess_head(
+                model,
+                self.classification_heads[dataset_name],
+                dataset_name,
+                cfg,
+                dataloader=self.test_loaders[dataset_name],
+            )
             Total_ACC += metrics["top1"]
             log.info("Eval: " + " dataset: " + str(dataset_name) + " ACC: " + str(metrics["top1"]))
 
@@ -159,7 +170,13 @@ class Program:
         Total_ACC = 0
         for dataset_name in self.cfg.datasets:
             classification_head = self.classification_heads[dataset_name]
-            metrics = eval_single_dataset_preprocess_head(self.model, classification_head, dataset_name, self.cfg)
+            metrics = eval_single_dataset_preprocess_head(
+                self.model,
+                classification_head,
+                dataset_name,
+                self.cfg,
+                dataloader=self.test_loaders[dataset_name],  # must pass corruption loader if cfg.corruption is not None
+            )
             Total_ACC += metrics["top1"]
             log.info("Eval: init: " + " dataset: " + str(dataset_name) + " ACC: " + str(metrics["top1"]))
 
@@ -193,8 +210,8 @@ class Program:
 
         self.pretrained_model = pretrained_model
         #! if gpu memory is not enough, comment the following line
-        if cfg.model == "ViT-B-32":
-            task_vectors = [{k: v.cuda(1) for k, v in tv.items()} for tv in task_vectors]
+        if cfg.model == "ViT-B-32" or cfg.model == "ViT-B-16":
+            task_vectors = [{k: v.cuda(0) for k, v in tv.items()} for tv in task_vectors]
         # elif cfg.model == "ViT-L-14":
         #     temp = []
         #     for tv in task_vectors[:4]:
@@ -236,18 +253,26 @@ class Program:
         log.info(f"total number of parameters in the model: {num_parameters(model)}")
 
     def load_datasets(self):
-        from src.datasets.registry import get_dataset
+        if self.cfg.corruption is None:
+            from src.datasets.registry import get_dataset
+        else:
+            from src.datasets.corruption.registry import get_dataset
 
         cfg = self.cfg
 
         # Load the datasets
+        datasets_kwargs = dict(
+            location=cfg.data_location,
+            batch_size=cfg.batch_size,
+            num_workers=cfg.num_workers,
+        )
+        if cfg.corruption is not None:
+            datasets_kwargs["corruption"] = cfg.corruption
         datasets = {
             dataset_name: get_dataset(
                 dataset_name,
                 self.pretrained_model.val_preprocess,
-                location=cfg.data_location,
-                batch_size=cfg.batch_size,
-                num_workers=cfg.num_workers,
+                **datasets_kwargs,
             )
             for dataset_name in cfg.datasets
         }
@@ -255,6 +280,7 @@ class Program:
         shuffled_test_loader_iters = {dataset_name: iter(itertools.cycle(dataloader)) for dataset_name, dataloader in shuffled_test_loaders.items()}
 
         self.datasets = datasets
+        self.test_loaders = {dataset_name: dataset.test_loader for dataset_name, dataset in datasets.items()}
         self.shuffled_test_loader_iters = shuffled_test_loader_iters
 
 

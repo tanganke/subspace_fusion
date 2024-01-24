@@ -327,3 +327,29 @@ setting 2
 | *Layer-wise AdaMergin (LW AM)-Based* |          |          |          |          |          |          |          |          |          |                                                                                                                                             |
 | LW AM                                | **76.7** | 87.6     | 84.8     | 93.8     | 85.9     | 88.1     | 95.2     | **88.6** | **87.6** | [TTA](flan-t5-large_lora-16/layer_wise_adamerging.csv)                                                                                      |
 | **Concrete LW AM**                   | 76.1     | **87.7** | **85.5** | **93.8** | 85.9     | 88.1     | **95.4** | 87.1     | 87.5     | [TTA](flan-t5-large_lora-16/layer_wise_concrete_adamerging_tta.csv)([meta-learn](flan-t5-large_lora-16/layer_wise_concrete_adamerging.csv)) |
+
+
+## OOD Experiments
+
+```bash
+source offline_mode.sh
+# model=ViT-B-16 
+model=ViT-B-32
+function ood_exp(){
+    version=$1
+    corruption=$2
+    python scripts/clip_concrete_task_arithmetic.py \
+        lr=3e-4 \
+        model=$model test_datasets="[Cars,EuroSAT,RESISC45,GTSRB]" \
+        corruption=$corruption version=$version
+}
+
+CUDA_VISIBLE_DEVICES=0 ood_exp 2 null &
+CUDA_VISIBLE_DEVICES=1 ood_exp 3 motion_blur &
+CUDA_VISIBLE_DEVICES=2 ood_exp 4 impulse_noise &
+CUDA_VISIBLE_DEVICES=3 ood_exp 5 gaussian_noise &
+CUDA_VISIBLE_DEVICES=4 ood_exp 6 pixelate &
+CUDA_VISIBLE_DEVICES=5 ood_exp 7 spatter &
+CUDA_VISIBLE_DEVICES=6 ood_exp 8 contrast &
+CUDA_VISIBLE_DEVICES=7 ood_exp 9 jpeg_compression &
+```
