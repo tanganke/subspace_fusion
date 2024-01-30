@@ -1,2 +1,2 @@
-- download LoRA fine-tuned flan-t5 models: <avilable at GitHub releases after double-blind review>
+- download LoRA fine-tuned flan-t5 models: "avilable at GitHub releases after double-blind review"
 - download fine-tuned CLIP models: https://drive.google.com/drive/folders/1u_Tva6x0p6oxu5Eo0ZZsf-520Cc_3MKw
