@@ -47,6 +47,7 @@ SRC_DIR = PROJECT_DIR / "src"
 CONFIG_DIR = PROJECT_DIR / "config"
 CACHE_DIR = PROJECT_DIR / "cache"
 TEMPLATE_DIR = PROJECT_DIR / "templates"
+LOG_DIR = PROJECT_DIR / "logs"
 
 sys.path.append(str(PROJECT_DIR))
 

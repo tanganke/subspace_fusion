@@ -3,7 +3,7 @@ import math
 import os
 import pickle
 import time
-from typing import List, Union
+from typing import List, Optional, Union
 
 import numpy as np
 import torch
@@ -11,6 +11,51 @@ from torch import Tensor, nn
 from tqdm import tqdm
 
 log = logging.getLogger(__name__)
+
+
+class TitledLog:
+    """
+    Examples:
+        >>> with TitledLog('msg'):
+        >>>     ... # do_something
+    """
+
+    def __init__(
+        self,
+        title: str = None,
+        title_width: int = 50,
+        log_fn=print,
+        log_kwargs: Optional[dict] = None,
+    ):
+        """
+
+        Args:
+            description (str, optional): _description_. Defaults to None.
+            logger (logging.Logger, optional): _description_. Defaults to log.info.
+        """
+        self.title = title if title is not None else ""
+        self.title_width = title_width
+
+        self.log_fn = log_fn
+        # log_kwargs
+        if self.log_fn == print:
+            self.log_kwargs = dict()
+        else:
+            self.log_kwargs = dict(stacklevel=2)
+        if log_kwargs is not None:
+            self.log_kwargs.update(log_kwargs)
+
+    def __enter__(self):
+        self.log_fn(
+            f"{self.title:=^{self.title_width}}",
+            **self.log_kwargs,
+        )
+
+    def __exit__(self, exc_type, exc_value, tb):
+        self.log_fn(
+            f"{'':=^{self.title_width}}",
+            **self.log_kwargs,
+        )
 
 
 class timeit_context:
